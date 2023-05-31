@@ -1,0 +1,305 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Metadata:
+    Generator: "former2"
+Description: ""
+Resources:
+    ApiGatewayV2Api:
+        Type: "AWS::ApiGatewayV2::Api"
+        Properties:
+            ProtocolType: "HTTP"
+            Name: !Sub "company-ApiGatewayV2Api-${AWS::Region}-${AWS::AccountId}"
+            Target: !GetAtt LambdaFunction.Arn
+
+
+    ApiGatewayV2Deployment:
+        Type: "AWS::ApiGatewayV2::Deployment"
+        Properties:
+            ApiId: !Ref ApiGatewayV2Api
+            Description: "Automatic deployment triggered by changes to the Api configuration"
+
+    ApiGatewayV2Route:
+        Type: "AWS::ApiGatewayV2::Route"
+        Properties:
+            ApiId: !Ref ApiGatewayV2Api
+            ApiKeyRequired: false
+            AuthorizationType: "NONE"
+            RequestParameters: {}
+            RouteKey: "GET /find/closecontacts"
+            Target: !Sub "integrations/${ApiGatewayV2Integration2}"
+
+    ApiGatewayV2Route2:
+        Type: "AWS::ApiGatewayV2::Route"
+        Properties:
+            ApiId: !Ref ApiGatewayV2Api
+            ApiKeyRequired: false
+            AuthorizationType: "NONE"
+            RequestParameters: {}
+            RouteKey: "GET /find/people"
+            Target: !Sub "integrations/${ApiGatewayV2Integration4}"
+
+    ApiGatewayV2Route3:
+        Type: "AWS::ApiGatewayV2::Route"
+        Properties:
+            ApiId: !Ref ApiGatewayV2Api
+            ApiKeyRequired: false
+            AuthorizationType: "NONE"
+            RequestParameters: {}
+            RouteKey: "GET /"
+            Target: !Sub "integrations/${ApiGatewayV2Integration3}"
+
+    ApiGatewayV2Route4:
+        Type: "AWS::ApiGatewayV2::Route"
+        Properties:
+            ApiId: !Ref ApiGatewayV2Api
+            ApiKeyRequired: false
+            AuthorizationType: "NONE"
+            RequestParameters: {}
+            RouteKey: "GET /find/locations"
+            Target: !Sub "integrations/${ApiGatewayV2Integration}"
+
+    ApiGatewayV2Integration:
+        Type: "AWS::ApiGatewayV2::Integration"
+        Properties:
+            ApiId: !Ref ApiGatewayV2Api
+            ConnectionType: "INTERNET"
+            IntegrationMethod: "POST"
+            IntegrationType: "AWS_PROXY"
+            IntegrationUri: !GetAtt LambdaFunction.Arn
+            TimeoutInMillis: 30000
+            PayloadFormatVersion: "2.0"
+
+    ApiGatewayV2Integration2:
+        Type: "AWS::ApiGatewayV2::Integration"
+        Properties:
+            ApiId: !Ref ApiGatewayV2Api
+            ConnectionType: "INTERNET"
+            IntegrationMethod: "POST"
+            IntegrationType: "AWS_PROXY"
+            IntegrationUri: !GetAtt LambdaFunction.Arn
+            TimeoutInMillis: 30000
+            PayloadFormatVersion: "2.0"
+
+    ApiGatewayV2Integration3:
+        Type: "AWS::ApiGatewayV2::Integration"
+        Properties:
+            ApiId: !Ref ApiGatewayV2Api
+            ConnectionType: "INTERNET"
+            IntegrationMethod: "POST"
+            IntegrationType: "AWS_PROXY"
+            IntegrationUri: !GetAtt LambdaFunction.Arn
+            TimeoutInMillis: 30000
+            PayloadFormatVersion: "2.0"
+
+    ApiGatewayV2Integration4:
+        Type: "AWS::ApiGatewayV2::Integration"
+        Properties:
+            ApiId: !Ref ApiGatewayV2Api
+            ConnectionType: "INTERNET"
+            IntegrationMethod: "POST"
+            IntegrationType: "AWS_PROXY"
+            IntegrationUri: !GetAtt LambdaFunction.Arn
+            TimeoutInMillis: 30000
+            PayloadFormatVersion: "2.0"
+
+    LambdaFunction:
+        Type: "AWS::Lambda::Function"
+        Properties:
+            Description: ""
+            FunctionName: "company-lambda"
+            Handler: "lambda_function.lambda_handler"
+            Architectures: 
+              - "x86_64"
+            Code: 
+                ZipFile: |
+                    import json
+
+                    def loadJson(json_filename):
+                        file = open(json_filename)
+                        data = json.load(file)
+                        return data
+
+                    contact_tracing_data = loadJson('data.json') 
+
+
+
+
+                    def isDateIn(particular_date,list_of_dates): 
+                        """Returns true if the specified date is in the list of dates, else returns false """
+                        for date in list_of_dates:
+                            if date == particular_date:
+                                return True
+                        return False
+
+
+                    def getLocation(particular_location): 
+                        """Returns the location object of the a particular LOCATION specified"""
+                        for location in contact_tracing_data:
+                            if location["location"] == particular_location:
+                                return location
+
+                    def findPeople(particular_location, date): 
+                        """Returns an array of every PERSON that has visited a particular LOCATION on a particular date"""
+                        matching_people_list = []
+                        location = getLocation(particular_location)
+                        for person in location["persons"]:
+                            if isDateIn(date,person["dates"]):
+                                matching_people_list.append(person["person"])
+                        return matching_people_list 
+                        
+
+                    def findLocationsFor(particular_person,particular_date):
+                        """Returns list of every LOCATION that a particular PERSON has visited on a particular date"""
+                        matching_locations_list = []
+                        for location in contact_tracing_data:
+                            for person in location["persons"]:
+                                if person["person"]==particular_person :
+                                    if isDateIn(particular_date,person["dates"]):
+                                        matching_locations_list.append(location["location"])
+                        return matching_locations_list
+
+
+                    def findCloseContacts(particular_person,particular_date): 
+                        """Returns list of CLOSE CONTACTS of a particular PERSON and on a particular date"""
+                        close_contacts= []
+                        hotspots = findLocationsFor(particular_person,particular_date)
+                        
+                        for hotspot in hotspots:
+                            for contact in findPeople(hotspot, particular_date):
+                                if contact not in close_contacts and contact!=particular_person: 
+                                    close_contacts.append(contact)
+                        return close_contacts 
+
+
+
+
+                    def lambda_handler(event, context):
+                        #print("event is")
+                        #print(event)
+
+                    
+                        if event['rawPath']== '/find/people':
+                            #print('START: on the raw path of /findPeople')
+                            date_query = event["queryStringParameters"]["date"]
+                            #print("date_query is "+ date_query)
+                            location_query = event["queryStringParameters"]["location"]
+                            #print("location_query is "+location_query)
+                            #print("Result is ")
+                            body = findPeople(location_query,date_query)
+                            return {
+                                'statusCode': 200,
+                                'body': json.dumps(body)
+                            }
+
+
+                        
+                        elif event['rawPath']== '/find/locations':
+                            #print('START: on the raw path of /findLocation')
+                            person_query = event["queryStringParameters"]["person"]
+                            #print("person_query is "+person_query)
+                            date_query = event["queryStringParameters"]["date"]
+                            #print("date_query is "+ date_query)
+                            #print("Result is ")
+                            body = findLocationsFor(person_query,date_query)
+                            return {
+                                'statusCode': 200,
+                                'body': json.dumps(body)
+                            }
+                            
+                        elif event['rawPath']== '/find/closecontacts':
+                            #print('START: on the raw path of /findCloseContacts')
+                            person_query = event["queryStringParameters"]["person"]
+                            #print("person_query is "+person_query)
+                            date_query = event["queryStringParameters"]["date"]
+                            #print("date_query is "+ date_query)
+                            #print("Result is ")
+                            body = findCloseContacts(person_query,date_query)
+                            return {
+                                'statusCode': 200,
+                                'body': json.dumps(body)
+                            }
+                        
+                        # only root endpoint or /find endpoint specified
+                        return {
+                            'statusCode': 400,
+                            'body': json.dumps('Please use valid raw path. For example: /find/closecontacts or  /find/locations or /find/people ')
+                        }
+            MemorySize: 128
+            Role: !GetAtt IAMRole.Arn
+            Runtime: "python3.9"
+            Timeout: 3
+            TracingConfig: 
+                Mode: "PassThrough"
+            EphemeralStorage: 
+                Size: 512
+
+    LambdaPermission:
+        Type: "AWS::Lambda::Permission"
+        Properties:
+            Action: "lambda:InvokeFunction"
+            FunctionName: !GetAtt LambdaFunction.Arn
+            Principal: "apigateway.amazonaws.com"
+            SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayV2Api}/*/*/"
+
+    LambdaPermission2:
+        Type: "AWS::Lambda::Permission"
+        Properties:
+            Action: "lambda:InvokeFunction"
+            FunctionName: !GetAtt LambdaFunction.Arn
+            Principal: "apigateway.amazonaws.com"
+            SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayV2Api}/*/*/find/people"
+
+    LambdaPermission3:
+        Type: "AWS::Lambda::Permission"
+        Properties:
+            Action: "lambda:InvokeFunction"
+            FunctionName: !GetAtt LambdaFunction.Arn
+            Principal: "apigateway.amazonaws.com"
+            SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayV2Api}/*/*/find/locations"
+
+    LambdaPermission4:
+        Type: "AWS::Lambda::Permission"
+        Properties:
+            Action: "lambda:InvokeFunction"
+            FunctionName: !GetAtt LambdaFunction.Arn
+            Principal: "apigateway.amazonaws.com"
+            SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayV2Api}/*/*/find/closecontacts"
+
+    IAMRole:
+        Type: "AWS::IAM::Role"
+        Properties:
+            Path: "/service-role/"
+            AssumeRolePolicyDocument: "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}"
+            MaxSessionDuration: 3600
+            ManagedPolicyArns: 
+              - !Ref  IAMManagedPolicycompanyLambda
+
+    IAMManagedPolicycompanyLambda:
+        Type: "AWS::IAM::ManagedPolicy"
+        Properties:
+            Path: "/service-role/"
+            PolicyDocument: !Sub |
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": "logs:CreateLogGroup",
+                            "Resource": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "logs:CreateLogStream",
+                                "logs:PutLogEvents"
+                            ],
+                            "Resource": [
+                                "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/company-lambda:*"
+                            ]
+                        }
+                    ]
+                }
+
+
+
+
+

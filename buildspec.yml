@@ -1,0 +1,14 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      python: 3.9
+    commands:
+  build:
+    commands:
+      - zip deployment_package.zip lambda_function.py data.json
+  post_build:
+    commands:
+      - echo "Updating lambda Function..."
+      - aws lambda update-function-code --function-name company-lambda --zip-file fileb://deployment_package.zip
+      - echo "DONE !!"
